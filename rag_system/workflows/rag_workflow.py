@@ -636,6 +636,24 @@ class RAGWorkflow:
             all_subqueries, query_analysis, allow_web_search, report_progress, iteration, original_query=query
         )
         
+        # Web search fallback: if no context and web search is allowed, try web search
+        if not all_context and allow_web_search:
+            report_progress("No tool results found, falling back to web search...")
+            try:
+                search_results = self.web_search_tool.search(query, max_results=3)
+                if search_results and 'results' in search_results:
+                    for result in search_results['results']:
+                        all_context.append({
+                            'text': result.get('content') or result.get('snippet') or '',
+                            'source': result.get('url', 'web'),
+                            'credibility_score': 0.7,
+                            'final_score': 0.7,
+                            'subquery_id': 'fallback_web_search',
+                        })
+                    sources_used.add('web_search_fallback')
+            except Exception as e:
+                report_progress(f"Web search fallback failed: {str(e)}")
+        
         # Synthesize answer from first pass
         report_progress("Synthesizing answer...")
         language = self.simple_detector.detect_language(query)
@@ -1143,13 +1161,28 @@ class RAGWorkflow:
         return None
     
     def _extract_tickers(self, query: str) -> List[str]:
-        words = query.upper().split()
-        common_tickers = ['NVDA', 'AMD', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META']
-        
+        """Extract stock tickers from query, including HK stocks"""
+        import re
+        query_upper = query.upper()
         found_tickers = []
+        
+        # 1) HK tickers like 0700.HK, with or without full-width parentheses
+        hk_matches = re.findall(r'[（(]?\s*(\d{4}\.HK)\s*[）)]?', query_upper)
+        found_tickers.extend(hk_matches)
+        
+        # 2) Pattern like "0700 HK" or "0700HK"
+        code_plus_hk = re.findall(r'\b(\d{4})\s*HK\b', query_upper)
+        for code in code_plus_hk:
+            ticker = f'{code}.HK'
+            if ticker not in found_tickers:
+                found_tickers.append(ticker)
+        
+        # 3) Existing US tickers
+        words = query_upper.split()
+        common_tickers = ['NVDA', 'AMD', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META']
         for word in words:
-            clean_word = word.strip('.,!?;:')
-            if clean_word in common_tickers:
+            clean_word = word.strip('.,!?;:（）()')
+            if clean_word in common_tickers and clean_word not in found_tickers:
                 found_tickers.append(clean_word)
         
         return found_tickers
@@ -1166,9 +1199,35 @@ class RAGWorkflow:
     
     def _extract_locations(self, query: str) -> List[str]:
         """Extract origin and destination from transport queries"""
+        import re
         locations = []
         query_lower = query.lower()
         
+        # Chinese patterns first
+        # Pattern: 我現在在 X，... 到達 Y
+        origin_match = re.search(r'我現在在(.+?)[，,。]', query)
+        dest_match = re.search(r'到達(.+?)(?:[，,。]|$)', query)
+        if not dest_match:
+            # Try without 到達, just 到
+            dest_match = re.search(r'[想要].*?到(.+?)(?:[，,。]|$)', query)
+        
+        if origin_match and dest_match:
+            origin = origin_match.group(1).strip()
+            dest = dest_match.group(1).strip()
+            # Remove time constraints like "三小時內"
+            dest = re.sub(r'[三二一四五六七八九十\d]+[小時分鐘天]內?', '', dest).strip()
+            return [origin, dest]
+        
+        # Pattern: 從 X 到 Y
+        from_to_match = re.search(r'從(.+?)到(.+?)(?:[，,。]|$)', query)
+        if from_to_match:
+            origin = from_to_match.group(1).strip()
+            dest = from_to_match.group(2).strip()
+            # Remove time constraints
+            dest = re.sub(r'[三二一四五六七八九十\d]+[小時分鐘天]內?', '', dest).strip()
+            return [origin, dest]
+        
+        # English patterns
         # Pattern 1: "go to Y" or "get to Y" with origin in "in X" or "at X"
         if 'go to ' in query_lower or 'get to ' in query_lower:
             # Extract destination

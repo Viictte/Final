@@ -640,7 +640,11 @@ class RAGWorkflow:
         if not all_context and allow_web_search:
             report_progress("No tool results found, falling back to web search...")
             try:
-                search_results = self.web_search_tool.search(query, max_results=3)
+                # Use enhanced query for better search results (domain-aware)
+                enhanced_query = self._enhance_query_for_web_search(query, query_analysis)
+                report_progress(f"Searching with enhanced query: {enhanced_query}")
+                
+                search_results = self.web_search_tool.search(enhanced_query, max_results=3)
                 if search_results and 'results' in search_results:
                     for result in search_results['results']:
                         all_context.append({
@@ -1318,25 +1322,33 @@ class RAGWorkflow:
     def _extract_date(self, query: str) -> Optional[str]:
         return None
     
-    def _enhance_query_for_web_search(self, query: str, domain_tools: List[str]) -> str:
-        if 'finance' in domain_tools:
+    def _enhance_query_for_web_search(self, query: str, query_analysis: Dict[str, Any]) -> str:
+        """Enhance query for better web search results with domain-aware optimization"""
+        domain = query_analysis.get('domain', 'general')
+        
+        # For finance queries, extract tickers and build English query for better results
+        if domain == 'finance':
             tickers = self._extract_tickers(query)
             if tickers:
-                if len(tickers) > 1:
-                    return f"{' vs '.join(tickers)} stock price comparison today"
-                else:
-                    return f"{tickers[0]} stock price today latest news"
+                # Build English query with ticker for better search results
+                ticker_str = ' '.join(tickers)
+                return f"{ticker_str} stock price today quote"
+            elif 'stock' not in query.lower() and 'price' not in query.lower():
+                return f"{query} stock price"
         
-        if 'weather' in domain_tools:
+        # For weather queries
+        elif domain == 'weather':
             location = self._extract_location(query)
-            if location:
+            if location and ('weather' not in query.lower() and 'forecast' not in query.lower()):
                 return f"{location} weather forecast today"
         
-        if 'transport' in domain_tools:
+        # For transport queries
+        elif domain == 'transport':
             locations = self._extract_locations(query)
-            if len(locations) >= 2:
+            if len(locations) >= 2 and ('route' not in query.lower() and 'directions' not in query.lower()):
                 return f"driving time distance {locations[0]} to {locations[1]}"
         
+        # Otherwise return original query
         return query
     
     def _try_web_extraction_for_finance(self, ticker: str) -> Optional[Dict[str, Any]]:

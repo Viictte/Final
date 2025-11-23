@@ -274,7 +274,11 @@ Provide your answer now:"""
         if not context or not context.strip():
             if allow_direct_knowledge:
                 return self.answer_direct(query, language=language)
-            return "I don't have information about this in the available sources."
+            # Provide more helpful message instead of generic "no information"
+            if language == 'zh':
+                return "抱歉，我無法從可用的數據源中獲取這個問題的答案。請嘗試換個方式提問或檢查相關官方網站。"
+            else:
+                return "I couldn't retrieve information about this from available sources. Please try rephrasing your question or check official sources directly."
         
         # Check cache first
         from rag_system.services.redis_service import get_redis_service
@@ -308,7 +312,7 @@ Partial Answers:
 - If context supports SOME but NOT ALL requested details:
   (a) Confidently answer the parts clearly supported by context
   (b) Briefly note which specific parts are not available (one sentence, no apologies)
-- If NO parts are supported: "I don't have information about this in the available sources."
+- If NO parts are supported: State that the information is not available in the provided context and suggest checking official sources
 
 Examples of GOOD confident answers:
 - "The 43rd Hong Kong Film Awards Best Actor winner is 劉青雲 for the film 《爸爸》[1][2]."
@@ -330,7 +334,7 @@ TASK:
 Provide a CONFIDENT, CLEAR answer using the context above.
 - If context fully supports the answer: state it directly and decisively with citations
 - If context partially supports: answer what's available confidently, then briefly note what's missing
-- If context doesn't support: "I don't have information about this in the available sources."
+- If context doesn't support: State that the information is not available and suggest checking official sources
 
 Be confident when evidence is clear. Avoid unnecessary hedging.
 

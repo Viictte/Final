@@ -188,7 +188,7 @@ def status():
         except Exception as e:
             click.echo(f"✗ Embeddings: {str(e)}")
         
-        # Test vision API and select working Gemini model
+        # Check vision API configuration
         try:
             from rag_system.tools.vision import get_vision_tool
             vision_tool = get_vision_tool()
@@ -198,13 +198,8 @@ def status():
             elif not vision_tool.api_key:
                 click.echo("✗ Vision: API key not configured")
             else:
-                # Test models and select working one
-                model = vision_tool.select_working_model(force=False)
-                if model:
-                    click.echo(f"✓ Vision: Connected (model: {model})")
-                else:
-                    error_msg = vision_tool._last_error or "All candidate models failed"
-                    click.echo(f"✗ Vision: {error_msg}")
+                # Vision API is configured
+                click.echo(f"✓ Vision: Configured (model: {vision_tool.model_name})")
         except Exception as e:
             click.echo(f"✗ Vision: {str(e)}")
         

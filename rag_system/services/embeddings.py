@@ -30,21 +30,35 @@ class EmbeddingService:
         model_name = config.get('embeddings.model', 'BAAI/bge-m3')
         self.batch_size = config.get('embeddings.batch_size', 32)
         
+        # Support for local model path (offline mode)
+        local_model_path = os.getenv('EMBEDDING_MODEL_PATH')
+        
         try:
-            print(f"Loading embedding model: {model_name}")
-            print("This may take a few minutes on first run (downloading ~1-2GB)...")
-            self.model = SentenceTransformer(model_name)
-            self.dimension = self.model.get_sentence_embedding_dimension()
-            print(f"Embedding model loaded successfully (dimension: {self.dimension})")
+            if local_model_path and os.path.exists(local_model_path):
+                # Load from local directory without accessing HuggingFace
+                print(f"Loading embedding model from local path: {local_model_path}")
+                print("(Offline mode - no HuggingFace connection required)")
+                self.model = SentenceTransformer(local_model_path, local_files_only=True)
+                self.dimension = self.model.get_sentence_embedding_dimension()
+                print(f"Embedding model loaded successfully (dimension: {self.dimension})")
+            else:
+                # Normal online mode - download from HuggingFace if needed
+                print(f"Loading embedding model: {model_name}")
+                print("This may take a few minutes on first run (downloading ~1-2GB)...")
+                self.model = SentenceTransformer(model_name)
+                self.dimension = self.model.get_sentence_embedding_dimension()
+                print(f"Embedding model loaded successfully (dimension: {self.dimension})")
         except Exception as e:
             error_msg = (
                 f"Failed to load embedding model '{model_name}': {str(e)}\n\n"
                 "If you're experiencing connection timeouts to huggingface.co:\n"
-                "1. Try increasing the timeout: export HF_HUB_TIMEOUT=120\n"
-                "2. Use a VPN or proxy to access huggingface.co\n"
-                "3. Use a mirror: export HF_ENDPOINT=https://hf-mirror.com\n"
-                "4. Pre-download the model on a machine with better connectivity\n"
-                "   and copy it to your HuggingFace cache directory\n\n"
+                "1. Use offline mode with a pre-downloaded model:\n"
+                "   - Download the model once on a machine with good connectivity\n"
+                "   - Set EMBEDDING_MODEL_PATH=/path/to/local/model in .env\n"
+                "   - Optionally set HF_HUB_OFFLINE=1 for full offline mode\n"
+                "2. Try increasing the timeout: export HF_HUB_TIMEOUT=120\n"
+                "3. Use a VPN or proxy to access huggingface.co\n"
+                "4. Use a mirror: export HF_ENDPOINT=https://hf-mirror.com\n\n"
                 "See README > Troubleshooting > Model Downloads for more details."
             )
             raise RuntimeError(error_msg) from e

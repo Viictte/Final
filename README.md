@@ -868,12 +868,42 @@ python3 ./rag ask "What does this audio say?" --file ./your_audio.mp3
   # Now the models are cached and won't need to be downloaded
   ```
 
-  **Option 5: Use local model path (advanced)**
-  - Download the model manually to a local directory
-  - Edit `config/config.yaml` and set `embeddings.model` to the local path
-  - Example: `embeddings.model: /path/to/local/bge-m3`
+  **Option 5: Use offline mode with local model (recommended for persistent connection issues)**
+  
+  This option allows you to download the model once and use it without any HuggingFace connection:
+  
+  ```bash
+  # Step 1: Download the model (on a machine with good connectivity)
+  python download_embedding_model.py ./models/bge-m3
+  
+  # Step 2: Add to your .env file
+  echo "EMBEDDING_MODEL_PATH=$(pwd)/models/bge-m3" >> .env
+  echo "HF_HUB_OFFLINE=1" >> .env
+  
+  # Step 3: Run the system - it will use the local model without connecting to HuggingFace
+  ./rag ask "test query"
+  ```
+  
+  If you need to download on a different machine and transfer:
+  ```bash
+  # On machine with good connectivity:
+  python download_embedding_model.py ./models/bge-m3
+  tar -czf bge-m3-model.tar.gz models/
+  
+  # Transfer bge-m3-model.tar.gz to your target machine, then:
+  tar -xzf bge-m3-model.tar.gz
+  echo "EMBEDDING_MODEL_PATH=$(pwd)/models/bge-m3" >> .env
+  echo "HF_HUB_OFFLINE=1" >> .env
+  ```
+  
+  The `download_embedding_model.py` script will:
+  - Download the BAAI/bge-m3 model (~1-2GB)
+  - Save it to a local directory
+  - Provide instructions for configuring your .env file
+  
+  After setup, the system will load the model from the local directory without any network calls to HuggingFace.
 
-**Note:** The system automatically uses a 60-second timeout (increased from the default 10 seconds) to help with slow connections. If you're still experiencing timeouts, try Option 1 to increase it further to 120 seconds.
+**Note:** The system automatically uses a 60-second timeout (increased from the default 10 seconds) to help with slow connections. If you're still experiencing timeouts, try Option 1 to increase it further to 120 seconds, or use Option 5 for full offline mode.
 
 ## API Keys
 

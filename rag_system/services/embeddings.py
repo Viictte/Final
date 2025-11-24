@@ -38,7 +38,8 @@ class EmbeddingService:
                 # Load from local directory without accessing HuggingFace
                 print(f"Loading embedding model from local path: {local_model_path}")
                 print("(Offline mode - no HuggingFace connection required)")
-                self.model = SentenceTransformer(local_model_path, local_files_only=True)
+                # When given a local path, SentenceTransformer loads from disk without network access
+                self.model = SentenceTransformer(local_model_path)
                 self.dimension = self.model.get_sentence_embedding_dimension()
                 print(f"Embedding model loaded successfully (dimension: {self.dimension})")
             else:
@@ -49,18 +50,28 @@ class EmbeddingService:
                 self.dimension = self.model.get_sentence_embedding_dimension()
                 print(f"Embedding model loaded successfully (dimension: {self.dimension})")
         except Exception as e:
-            error_msg = (
-                f"Failed to load embedding model '{model_name}': {str(e)}\n\n"
-                "If you're experiencing connection timeouts to huggingface.co:\n"
-                "1. Use offline mode with a pre-downloaded model:\n"
-                "   - Download the model once on a machine with good connectivity\n"
-                "   - Set EMBEDDING_MODEL_PATH=/path/to/local/model in .env\n"
-                "   - Optionally set HF_HUB_OFFLINE=1 for full offline mode\n"
-                "2. Try increasing the timeout: export HF_HUB_TIMEOUT=120\n"
-                "3. Use a VPN or proxy to access huggingface.co\n"
-                "4. Use a mirror: export HF_ENDPOINT=https://hf-mirror.com\n\n"
-                "See README > Troubleshooting > Model Downloads for more details."
-            )
+            # Provide context-aware error message
+            if local_model_path:
+                error_msg = (
+                    f"Failed to load embedding model from local path '{local_model_path}': {str(e)}\n\n"
+                    "Troubleshooting:\n"
+                    "1. Verify the model directory exists and contains valid model files\n"
+                    "2. Try re-downloading the model: python download_embedding_model.py\n"
+                    "3. Check that EMBEDDING_MODEL_PATH points to the correct directory\n"
+                )
+            else:
+                error_msg = (
+                    f"Failed to load embedding model '{model_name}': {str(e)}\n\n"
+                    "If you're experiencing connection timeouts to huggingface.co:\n"
+                    "1. Use offline mode with a pre-downloaded model:\n"
+                    "   - Download the model once on a machine with good connectivity\n"
+                    "   - Set EMBEDDING_MODEL_PATH=/path/to/local/model in .env\n"
+                    "   - Optionally set HF_HUB_OFFLINE=1 for full offline mode\n"
+                    "2. Try increasing the timeout: export HF_HUB_TIMEOUT=120\n"
+                    "3. Use a VPN or proxy to access huggingface.co\n"
+                    "4. Use a mirror: export HF_ENDPOINT=https://hf-mirror.com\n\n"
+                    "See README > Troubleshooting > Model Downloads for more details."
+                )
             raise RuntimeError(error_msg) from e
     
     def embed_text(self, text: str) -> np.ndarray:
